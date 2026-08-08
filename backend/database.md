@@ -1,7 +1,8 @@
 # Database Guidelines — Backend
-version: 1.0
-last-updated: 2026-06
+version: 1.1
+last-updated: 2026-08
 changelog:
+  - 1.1: require production schema changes to be reproducible and versioned in source control
   - 1.0: initial version
 
 ## When to use this skill
@@ -178,6 +179,42 @@ try {
 }
 ```
 
+### Production schema changes must be reproducible and versioned
+The live database must never be the only source of truth for structural schema changes.
+
+Any structural change applied to production, staging, or another shared environment must be represented in source control, even when the project does not use a formal migration framework.
+
+This includes, when applicable:
+- tables and columns
+- primary/foreign keys and other constraints
+- indexes
+- triggers and functions
+- RLS configuration/policies
+- grants or other schema-level permissions
+
+If the project already has a migration/schema convention, follow it.
+
+If it does not, do **not** introduce a large migration framework just for one change. Prefer small, ordered SQL files in a clearly documented database/migrations or database/scripts location so another developer or AI agent can reconstruct how the schema reached its current state.
+
+When SQL is applied manually through Supabase or another database console:
+1. Commit the equivalent SQL to the repository as part of the same change.
+2. Keep it safe/idempotent where practical (`IF EXISTS`, `IF NOT EXISTS`, guarded constraints, etc.).
+3. Record enough context to distinguish an already-applied production change from SQL that is still pending.
+4. Never claim a migration was executed against an environment unless it was actually executed.
+
+Before concluding that a table, column, constraint, policy, trigger, or function does not exist, inspect both the repository's versioned database definition and the real target database when access is available.
+
+❌ Never rely on an undocumented manual production change:
+```text
+Run SQL in Supabase → change works → SQL is never committed
+```
+
+✅ Keep the change reproducible:
+```text
+Create/update versioned SQL in repo → review → apply manually if required →
+record/report that production was applied
+```
+
 ## Checklist
 - [ ] All SELECT queries use explicit AS aliases in PascalCase
 - [ ] No string concatenation in SQL — always use @Parameters
@@ -187,6 +224,8 @@ try {
 - [ ] No business logic in repositories
 - [ ] All timestamps use DateTime.UtcNow
 - [ ] Multi-step writes use transactions
+- [ ] Structural database changes are reproducible and versioned in source control
+- [ ] Manual/shared-environment SQL is not left undocumented outside the repository
 
 ## Meta — Evolution
 If a new database pattern is needed →
