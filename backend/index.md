@@ -1,7 +1,8 @@
 # Backend Skills — Orchestrator
-version: 1.0
-last-updated: 2026-06
+version: 1.1
+last-updated: 2026-08
 changelog:
+  - 1.1: add server-side localization skill
   - 1.0: initial version
 
 ## When to use this skill
@@ -24,6 +25,7 @@ writing any code:
 | Defining architecture, modules, folder structure | `architecture.md` |
 | Handling errors, exceptions, HTTP responses | `error-handling.md` |
 | Database queries, repositories, Dapper patterns | `database.md` |
+| Server-side localization, locale packs, localized notifications/messages | `localization.md` |
 | Generating or modifying tests | `test-generator.md` |
 
 For tasks involving multiple areas, read all relevant
@@ -46,6 +48,7 @@ Before delivering any backend code verify:
 - [ ] Architecture follows architecture.md
 - [ ] Errors follow error-handling.md
 - [ ] DB queries follow database.md
+- [ ] Server-localized content follows localization.md when applicable
 
 ## Meta — Evolution
 If a task does not fit any existing skill →
