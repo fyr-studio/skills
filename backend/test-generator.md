@@ -1,225 +1,217 @@
 # Test Generator — Backend
-version: 1.0
-last-updated: 2026-06
+version: 2.0
+last-updated: 2026-08
 changelog:
+  - 2.0: align testing with modular Clean Architecture, CQRS, pipeline behaviors and thin controllers
   - 1.0: initial version
 
 ## When to use this skill
-When generating, modifying or reviewing tests for
-backend code.
+When generating, modifying or reviewing backend tests.
 
 ## Why
-Tests catch regressions in business logic, validate that
-repositories generate correct SQL, and document the
-expected behavior of each endpoint.
+Tests should protect business behavior, application boundaries, transaction and
+authorization rules, and integration points without coupling the suite to
+implementation details.
 
-## Stack
+## Default stack
 - xUnit
-- Moq (mocking)
-- FluentAssertions (readable assertions)
+- Moq
+- FluentAssertions
+- Microsoft.NET.Test.Sdk
+- Microsoft.AspNetCore.Mvc.Testing when end-to-end HTTP integration tests are
+  actually useful
 
-### Setup if not configured
-```bash
-dotnet add package xunit
-dotnet add package Moq
-dotnet add package FluentAssertions
-dotnet add package Microsoft.AspNetCore.Mvc.Testing
+Respect versions already pinned by the project.
+
+## Structure
+Mirror the production concepts rather than organizing everything around
+controllers.
+
+Example:
+
+```text
+DebtAssistant.Api.Tests/
+  Common/
+    Authentication/
+    Cqrs/
+    Web/
+  Modules/
+    Businesses/
+      Application/
+    Debts/
+      Domain/
+      Application/
+      Infrastructure/
 ```
 
-## Folder structure
-```
-YourProject.Tests/
-├── Controllers/
-│   ├── DebtControllerTests.cs
-│   └── MerchantControllerTests.cs
-├── Repositories/
-│   ├── DebtRepositoryTests.cs
-│   └── DebtPaymentRepositoryTests.cs
-├── Services/
-│   ├── GeminiServiceTests.cs
-│   └── VietQrServiceTests.cs
-└── Utils/
-    └── HelperTests.cs
-```
+Do not create empty test folders for modules that do not yet exist.
 
 ## Priority
 
-**High — test these first:**
-- Controllers — endpoint behavior, HTTP status codes, validation
-- Services — business logic (Gemini processing, VietQR generation)
+### High priority
+Test behavior with meaningful failure risk:
+- domain invariants and calculations;
+- command/query handlers with branching business rules;
+- FluentValidation validators and validation pipeline behavior;
+- authorization/business-scope behaviors;
+- transaction commit/rollback behavior;
+- idempotency and concurrency-sensitive behavior where practical;
+- exception-to-ProblemDetails/status mapping;
+- security-sensitive identity extraction/authorization logic.
 
-**Medium:**
-- Repositories — SQL query correctness (integration tests with test DB)
+### Medium priority
+- repositories with non-trivial SQL or mappings, preferably with integration tests
+  against an isolated test database when feasible;
+- external-provider adapters with deterministic mocked HTTP boundaries;
+- background-worker iteration logic separated from the infinite scheduling loop.
 
-**Do not test:**
-- DTOs (no logic)
-- Models (no logic)
-- Program.cs (infrastructure)
+### Usually low value
+Do not test trivial:
+- property-only records/DTOs;
+- DI boilerplate solely to increase coverage;
+- framework behavior already guaranteed by ASP.NET/MediatR;
+- implementation details such as private helper invocation order.
 
-## Templates
+## CQRS tests
+Test handlers as application use cases.
 
-### Controller test template
+Example:
+
 ```csharp
-// Controllers/DebtControllerTests.cs
-public class DebtControllerTests {
-    private readonly Mock<IDebtRepository> _debtRepoMock;
-    private readonly Mock<IDebtPaymentRepository> _paymentRepoMock;
-    private readonly DebtController _controller;
+[Fact]
+public async Task Handle_ThrowsConflict_WhenPaymentExceedsRemainingBalance()
+{
+    var repository = new Mock<IDebtRepository>();
+    // arrange current persisted state
 
-    public DebtControllerTests() {
-        _debtRepoMock = new Mock<IDebtRepository>();
-        _paymentRepoMock = new Mock<IDebtPaymentRepository>();
-        _controller = new DebtController(_debtRepoMock.Object, _paymentRepoMock.Object);
-    }
+    var handler = new RegisterDebtPaymentCommandHandler(repository.Object);
 
-    [Fact]
-    public async Task PartialPayment_ReturnsOk_WhenAmountIsValid() {
-        // Arrange
-        var debtId = Guid.NewGuid();
-        var debt = new Debt { Id = debtId, Amount = 500000, PaidAmount = 0, Status = "pending" };
-        _debtRepoMock.Setup(r => r.GetDebtByIdAsync(debtId)).ReturnsAsync(debt);
+    var act = () => handler.Handle(command, CancellationToken.None);
 
-        var request = new PartialPaymentRequestDto { Amount = 200000 };
-
-        // Act
-        var result = await _controller.PartialPayment(debtId, request, "user-id");
-
-        // Assert
-        result.Should().BeOfType<OkObjectResult>();
-    }
-
-    [Fact]
-    public async Task PartialPayment_ReturnsBadRequest_WhenAmountExceedsBalance() {
-        // Arrange
-        var debtId = Guid.NewGuid();
-        var debt = new Debt { Id = debtId, Amount = 500000, PaidAmount = 400000 };
-        _debtRepoMock.Setup(r => r.GetDebtByIdAsync(debtId)).ReturnsAsync(debt);
-
-        var request = new PartialPaymentRequestDto { Amount = 200000 }; // exceeds 100000 balance
-
-        // Act
-        var result = await _controller.PartialPayment(debtId, request, "user-id");
-
-        // Assert
-        result.Should().BeOfType<BadRequestObjectResult>();
-    }
-
-    [Fact]
-    public async Task PartialPayment_ReturnsNotFound_WhenDebtDoesNotExist() {
-        // Arrange
-        _debtRepoMock.Setup(r => r.GetDebtByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Debt?)null);
-
-        // Act
-        var result = await _controller.PartialPayment(Guid.NewGuid(), new PartialPaymentRequestDto { Amount = 100 }, "user-id");
-
-        // Assert
-        result.Should().BeOfType<NotFoundObjectResult>();
-    }
+    await act.Should().ThrowAsync<ConflictException>();
 }
 ```
 
-### Service test template
-```csharp
-// Services/VietQrServiceTests.cs
-public class VietQrServiceTests {
-    private readonly VietQrService _service;
+Do not test the same business rule again through a controller unless the HTTP
+mapping itself is what matters.
 
-    public VietQrServiceTests() {
-        _service = new VietQrService();
-    }
+## Validation tests
+For FluentValidation, test meaningful rules directly and test the shared
+`ValidationBehavior` once as infrastructure.
 
-    [Fact]
-    public void GenerateQrUrl_ReturnsCorrectUrl_WithValidInputs() {
-        // Arrange
-        var bankBin = "970418";
-        var accountNumber = "1234567890";
-        var amount = 500000L;
-        var description = "Payment";
+Avoid duplicating every validator test at both validator and HTTP levels.
 
-        // Act
-        var url = _service.GenerateQrUrl(bankBin, accountNumber, amount, description);
+## Pipeline behavior tests
+Shared behaviors deserve focused tests because they affect many modules.
 
-        // Assert
-        url.Should().Contain(bankBin);
-        url.Should().Contain(accountNumber);
-        url.Should().Contain("500000");
-    }
+Examples:
+- `ValidationBehavior` does not call the handler on validation failure;
+- `TransactionBehavior` commits on success;
+- `TransactionBehavior` rolls back and rethrows on failure;
+- business authorization behavior rejects invalid scope before invoking the
+  handler.
 
-    [Theory]
-    [InlineData("", "1234567890", 500000)]
-    [InlineData("970418", "", 500000)]
-    [InlineData("970418", "1234567890", 0)]
-    public void GenerateQrUrl_ReturnsNull_WhenInputsAreInvalid(
-        string bankBin, string account, long amount) {
-        var url = _service.GenerateQrUrl(bankBin, account, amount, "desc");
-        url.Should().BeNull();
-    }
-}
+## Error handling tests
+Test central mappings rather than duplicating controller error assertions.
+
+Verify known exceptions map to the intended status and unexpected exceptions do
+not expose internal details.
+
+## Controller tests
+Controllers should be thin. Unit-test them only when they contain meaningful HTTP
+translation behavior that is not already covered elsewhere.
+
+Do not mock repositories directly into controllers in an architecture where
+controllers only depend on `ISender`.
+
+If testing a thin controller is worthwhile, mock/send through the application
+boundary rather than bypassing it with internal repositories.
+
+## Repository tests
+Prefer integration tests for SQL correctness when the query itself is the thing
+being validated.
+
+Use an isolated disposable/test database strategy appropriate to the project.
+Tests must not mutate shared production/staging data.
+
+Cover important cases such as:
+- Dapper aliases/materialization;
+- unique/conflict behavior;
+- transaction participation;
+- row locking/concurrency where correctness depends on it.
+
+Do not write brittle tests that assert large SQL strings character-for-character
+unless exact SQL text is itself contractual.
+
+## External provider tests
+Mock the network boundary, not the entire application.
+
+Test:
+- request construction when non-trivial;
+- response parsing;
+- transient failure/retry classification;
+- cancellation;
+- provider-specific error translation.
+
+Never use live API keys in unit tests.
+
+## Background services
+Separate one logical iteration from the scheduling loop where practical, then test
+the iteration behavior directly.
+
+Do not write tests that sleep for real-world intervals.
+
+## Authentication tests
+Do not depend on a live identity/JWKS endpoint for unit tests.
+
+Test project-owned code such as:
+- current-user claim extraction;
+- configuration derivation/validation;
+- business authorization behavior.
+
+Let framework integration tests cover JWT middleware only when necessary, using
+local deterministic signing keys rather than production secrets.
+
+## Naming
+Use descriptive behavior-oriented test names.
+
+Recommended pattern:
+
+```text
+MethodOrUseCase_ExpectedBehavior_WhenCondition
 ```
 
-### Repository integration test template
-```csharp
-// Repositories/DebtRepositoryTests.cs
-// Note: requires a test database connection
-public class DebtRepositoryTests : IDisposable {
-    private readonly NpgsqlConnection _db;
-    private readonly DebtRepository _repository;
-
-    public DebtRepositoryTests() {
-        _db = new NpgsqlConnection(TestConnectionString);
-        _repository = new DebtRepository(_db);
-    }
-
-    [Fact]
-    public async Task GetDebtByIdAsync_ReturnsDebt_WhenExists() {
-        // Arrange — insert test data
-        var debtId = Guid.NewGuid();
-        await _db.ExecuteAsync(
-            "INSERT INTO debts (id, amount) VALUES (@Id, @Amount)",
-            new { Id = debtId, Amount = 500000L });
-
-        // Act
-        var debt = await _repository.GetDebtByIdAsync(debtId);
-
-        // Assert
-        debt.Should().NotBeNull();
-        debt!.Amount.Should().Be(500000L);
-    }
-
-    public void Dispose() {
-        // Clean up test data
-        _db.Execute("DELETE FROM debts WHERE id = @Id", new { Id = testDebtId });
-        _db.Dispose();
-    }
-}
-```
-
-## Naming conventions
+Examples:
 
 ```csharp
-// Pattern: MethodName_ExpectedResult_WhenCondition
-[Fact]
-public async Task PartialPayment_ReturnsOk_WhenAmountIsValid() { }
-
-[Fact]
-public async Task PartialPayment_ReturnsBadRequest_WhenAmountIsZero() { }
-
-[Fact]
-public async Task GetDebtById_ReturnsNull_WhenDebtDoesNotExist() { }
+Handle_ThrowsForbidden_WhenBusinessIsNotOwnedByAccount()
+Handle_CommitsTransaction_WhenCommandSucceeds()
+TryHandleAsync_Returns404_WhenResourceIsMissing()
 ```
+
+## Assertions
+Prefer the smallest set of assertions necessary to prove the behavior.
+
+"One assertion per test" is not a strict rule. Multiple closely related
+assertions are acceptable when they collectively verify one behavior.
+
+Avoid tests whose only purpose is improving coverage percentage.
 
 ## Checklist
-- [ ] Tests are in a separate `*.Tests` project
-- [ ] Controllers tested with mocked repositories
-- [ ] Services tested with mocked external dependencies
-- [ ] Each test has a single clear assertion
-- [ ] Test names follow MethodName_Result_Condition pattern
-- [ ] Integration tests clean up after themselves
-- [ ] No tests for DTOs or Models
+- [ ] Tests mirror modules/application concepts rather than legacy controller structure
+- [ ] Domain and handler business rules are tested where they live
+- [ ] Shared pipeline behaviors have focused tests
+- [ ] Central error mapping is tested centrally
+- [ ] Thin controllers are not over-tested
+- [ ] Repository SQL tests use isolated integration infrastructure when needed
+- [ ] No test hits production/staging data or live external APIs
+- [ ] Auth unit tests do not require live JWKS/network access
+- [ ] Test names describe behavior and condition
+- [ ] Assertions protect behavior rather than implementation details
 
 ## Meta — Evolution
-If a new testing pattern is needed for a specific feature →
+If a new testing pattern is needed →
 report with **[SKILL UPDATE SUGGESTED]** indicating:
-- The feature and why existing templates don't cover it
-- The proposed test pattern
-- Whether it's an extension or correction
+- the feature and why existing guidance does not cover it;
+- the proposed pattern;
+- whether it is an extension, correction or breaking change.
