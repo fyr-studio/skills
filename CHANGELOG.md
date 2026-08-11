@@ -3,6 +3,19 @@
 Global change history for all skills.
 For the specific changelog of each skill, see the file header.
 
+## 2026-08
+
+### Backend architecture v2
+- `backend/index.md` v2.0: project-specific decisions now override generic skills; backend defaults aligned with modular monolith + Clean Architecture.
+- `backend/architecture.md` v2.0: removed legacy `Shared`, `BaseController`, Merchant validation and controller/repository business-logic guidance; added Clean Architecture per module, CQRS boundaries, module-owned DI, thin controllers and minimal `IPublic<Module>` cross-module facades.
+- `backend/naming.md` v2.0: added CQRS/public-facade naming, modern .NET constant naming, and English-first guidance for new/reworked code.
+- `backend/error-handling.md` v2.0: replaced controller-local/ad-hoc errors and `T()`/BaseController patterns with centralized exception handling, validation pipeline guidance and `ProblemDetails`.
+- `backend/database.md` v2.0: repositories are module-owned persistence ports rather than one-per-table wrappers; added transaction/concurrency guidance and explicit project-owned schema source-of-truth policy.
+- `backend/test-generator.md` v2.0: test guidance now centers domain/use-case/pipeline behavior instead of legacy controller/repository coupling.
+- `backend/index.md` v1.1: added server-side localization skill.
+- `backend/database.md` v1.1: required production schema changes to be reproducible and versioned.
+- `backend/localization.md` v1.0: initial server-side localization guidance.
+
 ## 2026-06
 
 ### Initial release
