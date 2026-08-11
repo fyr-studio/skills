@@ -1,164 +1,247 @@
 # Architecture Guidelines — Backend
-version: 1.0
-last-updated: 2026-06
+version: 2.0
+last-updated: 2026-08
 changelog:
+  - 2.0: replace legacy Shared/BaseController architecture with modular monolith + Clean Architecture, CQRS boundaries, module-owned DI and explicit cross-module facades
   - 1.0: initial version
 
 ## When to use this skill
-When creating new modules, endpoints, services or deciding
-where to put business logic in the backend.
+When creating or refactoring backend modules, endpoints, use cases, services,
+folder structure, dependency injection, module boundaries, or cross-module
+communication.
 
 ## Why
-A consistent modular monolith architecture is the right
-choice for MVP-stage products. It's faster to develop than
-microservices, easier to deploy, and can be extracted into
-services when real scale justifies it.
+Fyr Studio backends should stay simple enough for one developer to maintain while
+keeping business boundaries clean enough to scale without a structural rewrite.
+The default is a modular monolith: one deployable, explicit modules, clean
+dependency direction, and no premature distributed-system complexity.
 
-## Rules
+Project-specific architecture documented in the repository may refine these
+rules. Do not silently override an explicit project decision with a generic skill.
 
-### Modular monolith — no microservices at MVP stage
-Do not split into microservices until a module has
-demonstrably different scaling needs or a separate team owns it.
+## Core rules
 
-✅ Current architecture:
-```
+### Modular monolith by default
+Do not introduce microservices because a product may scale someday.
+
+Keep one deployable backend until there is concrete evidence that a module needs
+independent deployment, ownership, scaling, isolation, or technology choices.
+
+A future extraction path is a benefit of good module boundaries, not a reason to
+create distributed infrastructure now.
+
+### Clean Architecture inside each business module
+The standard module shape is:
+
+```text
 Modules/
-├── DebtManagement/     ← debt business logic
-├── AudioProcessing/    ← Gemini, entity extraction
-├── Payments/           ← VietQR
-├── Notifications/      ← push, subscription alerts
-└── Tenancy/            ← merchants, subscriptions
-Shared/
-├── DTOs/               ← data transfer objects only
-├── Models/             ← domain models
-└── Contracts/          ← interfaces only
+  <Module>/
+    Domain/
+    Application/
+    Infrastructure/
+    Presentation/
+    DependencyInjection.cs
+    IPublic<Module>.cs        # optional — only when another module consumes it
 ```
 
-❌ Premature extraction:
-```
-// Don't create a separate AudioProcessing microservice
-// until recording volume justifies independent scaling
+Do not create empty folders merely to satisfy the diagram. Add a layer when the
+module actually has code owned by that layer.
+
+Responsibilities:
+
+- `Domain` — business entities, value objects, invariants, domain-specific errors.
+- `Application` — use cases, commands/queries, handlers, validators, repository
+  ports and application contracts.
+- `Infrastructure` — Dapper/Npgsql repositories, external providers, file/network
+  integrations and implementations of Application ports.
+- `Presentation` — ASP.NET controllers and HTTP transport concerns.
+- `DependencyInjection.cs` — registrations owned by that module.
+
+Dependency direction:
+
+```text
+Presentation -> Application -> Domain
+Infrastructure -> Application / Domain
 ```
 
-### Shared folder rules
-- `Shared/DTOs/` — data transfer objects only, no logic
-- `Shared/Contracts/` — interfaces only, no implementations
-- `Shared/Models/` — domain models only, no business logic
+Forbidden:
 
-✅
+```text
+Domain -> Infrastructure
+Domain -> Presentation
+Application -> Presentation
+Application -> ASP.NET HTTP types
+```
+
+Domain code must not depend on Dapper, Npgsql, HTTP, configuration providers,
+external SDKs, or mediator libraries.
+
+### CQRS without Vertical Slice ceremony
+For projects using CQRS, commands and queries live inside the module's
+`Application` layer and handlers own individual use cases.
+
+Prefer explicit command/query handlers over large application `Service` classes
+that accumulate unrelated use cases.
+
+Do not interpret CQRS as a requirement to create a deep folder tree per feature.
+Use the simplest organization that keeps commands, queries, validators and
+handlers discoverable.
+
+Mediator libraries are implementation details. Respect the package/version pinned
+by the project and do not perform major upgrades without an explicit design
+review.
+
+### Thin controllers
+Controllers are HTTP adapters.
+
+They should typically:
+1. read route/body/query transport input;
+2. construct a command/query;
+3. send it through the application mediator;
+4. return the successful result.
+
+Controllers must not:
+- contain business rules;
+- access repositories directly;
+- open database transactions;
+- call AI/external providers directly;
+- repeat tenant/business authorization logic;
+- contain repetitive try/catch blocks;
+- coordinate multi-module writes themselves.
+
+Do not introduce a shared `BaseController` for domain validation, tenant lookup,
+localization, or authentication. Put those concerns in the correct middleware,
+pipeline behavior, module, or service.
+
+### Common is infrastructure, not shared business code
+When a project uses a common cross-cutting area, use narrowly owned categories
+such as:
+
+```text
+Common/
+  Authentication/
+  Cqrs/
+    Behaviors/
+  Database/
+  Errors/
+  Web/
+```
+
+`Common` means **no business module owns this concern**. It does not mean "used by
+multiple modules".
+
+Do not recreate dumping grounds such as:
+
+```text
+Shared/Models
+Shared/DTOs
+Shared/Contracts
+Common/Models
+Common/DTOs
+Common/Contracts
+Helpers
+Utils
+```
+
+If a type has business meaning, put it in the module that owns that meaning.
+
+### Cross-module communication uses explicit public facades
+A module must not consume another module's internal Domain, Application,
+Infrastructure, repositories, or internal services.
+
+When module A genuinely needs module B, B may expose one minimal root-level
+facade:
+
+```text
+Modules/Contacts/IPublicContact.cs
+Modules/Billing/IPublicBilling.cs
+```
+
+Convention:
+- singular name: `IPublicContact`, not `IPublicContacts`;
+- create it only after a real cross-module dependency exists;
+- expose the smallest stable capability the consumer needs;
+- return small public contract records, not Domain entities;
+- do not simply expose internal repositories/services through properties;
+- small public records may live in the same file until growth justifies a folder.
+
+Another module should depend only on that explicit public contract.
+
+Do not create `IPublicX` speculatively for every module.
+
+### Business/tenant scope is explicit
+If a product has tenant/business-scoped data, the tenant/business identifier
+should be explicit in the use case/API rather than inferred from "the only one"
+when the domain may support multiple later.
+
+Authentication establishes identity. The owning business/tenant module establishes
+access to a scoped resource. Do not combine authentication identity, tenant,
+billing and business profile into one god-object.
+
+Repeated scope authorization belongs in middleware/pipeline behavior owned by the
+relevant module, not duplicated in each handler.
+
+### Module-owned dependency injection
+Keep `Program.cs` compositional and small.
+
+Each module registers its own internals in its `DependencyInjection.cs`.
+A root composition extension may call module registrations, but it should not
+know every repository implementation inside every module.
+
+Conceptually:
+
 ```csharp
-// Shared/Contracts/IDebtRepository.cs — interface only
-public interface IDebtRepository {
-    Task<Debt?> GetDebtByIdAsync(Guid debtId);
-}
-
-// Shared/DTOs/PartialPaymentRequestDto.cs — data only
-public class PartialPaymentRequestDto {
-    public long Amount { get; set; }
-    public string? Note { get; set; }
-}
+builder.Services
+    .AddApi(builder.Configuration)
+    .AddAuthentication(builder.Configuration)
+    .AddDatabase(builder.Configuration)
+    .AddApplication()
+    .AddModules(builder.Configuration);
 ```
 
-❌
-```csharp
-// Shared/DTOs/DebtDto.cs — no logic in DTOs
-public class DebtDto {
-    public long GetRemainingBalance() => Amount - PaidAmount; // WRONG
-}
-```
+Do not put dozens of `AddScoped` registrations directly in `Program.cs`.
 
-### BaseController for merchant validation
-All controllers that require an authenticated merchant
-must extend `BaseController` and use `ValidateMerchantAsync`.
+### Background services belong to a module
+Use `BackgroundService` for recurring in-process work when that is sufficient.
+The worker and its registration belong to the module that owns the behavior.
 
-✅
-```csharp
-public class DebtController : BaseController {
-    [HttpPost]
-    public async Task<IActionResult> CreateDebt(
-        [FromBody] CreateDebtRequestDto request,
-        [FromQuery] string UserId)
-    {
-        var (merchant, error) = await ValidateMerchantAsync(UserId);
-        if (error != null) return error;
-        // ... rest of logic
-    }
-}
-```
+Do not keep a worker alive by swallowing cancellation. Handle operational
+failures, log them, and allow requested shutdown to propagate.
 
-❌
-```csharp
-// Never duplicate merchant validation logic in each endpoint
-public async Task<IActionResult> CreateDebt(...) {
-    var merchant = await _merchantRepo.GetByUserIdAsync(UserId);
-    if (merchant == null) return Unauthorized();
-    if (merchant.ExpiresAt < DateTime.UtcNow) return Unauthorized();
-    // ... this is already in BaseController
-}
-```
+### Avoid speculative patterns
+Do not add aggregates, factories, domain events, message buses, generic
+repositories, generic UnitOfWork abstractions, or extra assemblies just because
+they are common architecture vocabulary.
 
-### Layer responsibilities
-```
-Controller  → validate input, call repository/service, return HTTP response
-Repository  → SQL queries only, no business logic
-Service     → cross-cutting business logic (Gemini, VietQR, Push)
-```
+Introduce a pattern when it solves a real rule or coupling problem.
 
-✅ Controller calls repository:
-```csharp
-// Controller
-var debt = await _debtRepository.GetDebtByIdAsync(debtId);
-if (debt == null) return NotFound(...);
+## Extraction rule
+Consider extracting a module from the monolith only when evidence justifies the
+operational cost, for example:
+- materially different scaling requirements;
+- independent deployment is repeatedly needed;
+- stronger fault/security isolation is required;
+- a separate team or ownership boundary exists;
+- a technology constraint cannot reasonably live in the monolith.
 
-// Repository
-public async Task<Debt?> GetDebtByIdAsync(Guid debtId) {
-    return await _db.QuerySingleOrDefaultAsync<Debt>(
-        "SELECT * FROM debts WHERE id = @DebtId", new { DebtId = debtId });
-}
-```
-
-❌ Business logic in repository:
-```csharp
-// Repository — WRONG
-public async Task<Debt?> GetDebtByIdAsync(Guid debtId) {
-    var debt = await _db.QuerySingleOrDefaultAsync<Debt>(...);
-    if (debt.PaidAmount >= debt.Amount) debt.Status = "paid"; // business logic!
-    return debt;
-}
-```
-
-### Background services
-Use `BackgroundService` for recurring tasks (cron jobs).
-Register in `Program.cs` with `AddHostedService`.
-
-✅
-```csharp
-// Modules/Notifications/DebtReminderService.cs
-public class DebtReminderService : BackgroundService {
-    protected override async Task ExecuteAsync(CancellationToken ct) { ... }
-}
-
-// Program.cs
-builder.Services.AddHostedService<DebtReminderService>();
-```
-
-### When to extract a module to microservice
-Only when ALL of these are true:
-1. The module has 10x more traffic than others
-2. A separate team owns it
-3. Deployment cycles need to be independent
+One signal alone is not automatically sufficient. Compare the operational cost
+before extracting.
 
 ## Checklist
-- [ ] No microservices created without justified reason
-- [ ] Shared/DTOs has no logic
-- [ ] Shared/Contracts has only interfaces
-- [ ] All authenticated endpoints use BaseController
-- [ ] Business logic is in Controller or Service, not Repository
-- [ ] Background services registered with AddHostedService
+- [ ] Modular monolith remains the default unless extraction is justified
+- [ ] Each module follows clean dependency direction
+- [ ] Controllers are thin HTTP adapters
+- [ ] Application use cases do not depend on HTTP
+- [ ] Business types are owned by modules, not Common/Shared dumping grounds
+- [ ] Cross-module dependencies use a minimal `IPublic<Module>` facade when needed
+- [ ] No speculative `IPublicX` files were created
+- [ ] Program.cs is compositional; module DI stays module-owned
+- [ ] Tenant/business access is not inferred from client-supplied identity
+- [ ] No architecture pattern was added without a concrete problem
 
 ## Meta — Evolution
 If a new architectural pattern is needed →
 report with **[SKILL UPDATE SUGGESTED]** indicating:
-- The pattern and the problem it solves
-- Why existing architecture doesn't cover it
-- Whether it's an extension or breaking change
+- the pattern and the problem it solves;
+- why the existing architecture does not cover it;
+- whether it is an extension, correction or breaking change.
