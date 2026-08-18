@@ -1,130 +1,59 @@
-# Architecture Guidelines — Frontend
-version: 1.0
-last-updated: 2026-06
+# Frontend Architecture Guidelines
+version: 2.0
+last-updated: 2026-08
 changelog:
+  - 2.0: replace React Native/Debt Assistant structure with platform-neutral client architecture guidance
   - 1.0: initial version
 
-## When to use this skill
-When defining folder structure, creating new modules,
-deciding where to put logic, or evaluating architectural patterns.
+## Foundation
+Also follow `../core/architecture.md` and `../core/engineering-principles.md`.
 
-## Why
-A consistent architecture reduces cognitive load, makes the
-codebase predictable and allows the AI to make correct decisions
-without asking where things go.
+## Responsibilities
+Keep these concerns distinct when present:
+- presentation/components/views;
+- screen/page/scene coordination;
+- application/client state;
+- domain/use-case logic shared beyond one view;
+- external I/O (HTTP, storage, platform SDKs);
+- navigation/routing.
 
-## Rules
+Do not create layers that have no actual responsibility.
 
-### Folder structure
-```
-project/
-├── app/
-│   └── screens/          ← one file per screen
-├── components/           ← reusable components
-├── context/              ← React context (auth, global state)
-├── hooks/                ← custom hooks
-├── services/             ← API calls, external services
-├── utils/                ← pure utility functions
-├── types/                ← TypeScript types and interfaces
-├── locales/              ← i18n translation files
-└── skills/               ← AI development guidelines
-```
+## External I/O
+UI rendering code must not own raw HTTP/database/storage/provider details.
 
-### API calls
-NEVER use fetch directly in screens or components.
-ALWAYS centralize in `services/api.ts`.
+Centralize external access behind cohesive client services/adapters so authentication, serialization, retries and error classification are not duplicated across screens/components.
 
-✅
-```typescript
-// services/api.ts
-export const getDebtHistory = async (userId: string) => {
-  const response = await fetch(`${API_URL}/api/debt/history?userId=${userId}`);
-  if (!response.ok) throw new Error(`Error: ${response.status}`);
-  return response.json();
-};
+Do not force one giant `api.ts`; split by cohesive responsibility when growth justifies it.
 
-// screens/PendingDebtsScreen.tsx
-import { getDebtHistory } from '../../services/api';
-const data = await getDebtHistory(userId);
-```
+## State
+Use the narrowest state scope that owns the behavior:
+1. local/view state;
+2. feature state shared by a bounded flow;
+3. application/global state only for genuinely app-wide concerns.
 
-❌
-```typescript
-// screens/PendingDebtsScreen.tsx — NEVER do this
-const response = await fetch(`${API_URL}/api/debt/history?userId=${userId}`);
-```
+Do not put screen-specific state into a global store merely because one exists.
 
-### State management
-- Local state with `useState` for screen-level data
-- `Context` only for truly global state (auth session)
-- No Redux or Zustand — not needed at current scale
-- `AsyncStorage` only for persistent user preferences
+Choose the project/framework's simplest adequate state mechanism. Do not ban or mandate a library globally without evidence.
 
-✅ Local state for screen data:
-```typescript
-const [debts, setDebts] = useState<Debt[]>([]);
-const [isLoading, setIsLoading] = useState(false);
-```
+## Navigation
+Routes/scenes and their parameters should be typed/validated where the platform supports it. Navigation decisions belong to flow/presentation coordination, not low-level reusable components or domain logic.
 
-❌ Global state for screen data:
-```typescript
-// Don't put screen-specific data in Context
-```
+## Components
+Prefer components/views with a clear responsibility and explicit inputs/outputs.
 
-### Navigation
-- All routes defined in `types/navigation.ts`
-- Add new routes there before using them in App.tsx
-- Never hardcode route names as strings in screens
+Separate presentation from orchestration when the combination creates real complexity or blocks reuse/testing; do not split every tiny component ceremonially.
 
-✅
-```typescript
-// types/navigation.ts
-export type RootStackParamList = {
-  Recording: undefined;
-  Confirmation: { data: ProcessedDebtResponse };
-};
+## Platform boundaries
+Platform-specific APIs (camera, files, notifications, billing, native plugins, Unity services, etc.) should be wrapped when doing so prevents business/feature logic from depending directly on volatile provider details.
 
-// screens/RecordingScreen.tsx
-navigation.navigate('Confirmation', { data });
-```
-
-### Component responsibility
-Each component does one thing.
-If a component handles logic AND presentation, split it.
-
-✅ Separated:
-```typescript
-// components/DebtCard.tsx — presentation only
-// hooks/useDebtActions.ts — logic only
-```
-
-❌ Mixed:
-```typescript
-// components/DebtCard.tsx — handles API calls, navigation AND rendering
-```
-
-### File imports order
-```typescript
-// 1. React
-import React, { useState, useEffect } from 'react';
-// 2. React Native
-import { View, Text, StyleSheet } from 'react-native';
-// 3. External libraries
-import { useTranslation } from 'react-i18next';
-// 4. Internal — types, services, utils, components
-import { Debt } from '../types';
-import { getDebtHistory } from '../services/api';
-```
+## Persistence
+Local persistence is for data/preferences that must survive process restarts. Do not use persistent storage as accidental global state or as a duplicate server source of truth.
 
 ## Checklist
-- [ ] No fetch calls outside services/api.ts
-- [ ] New routes added to types/navigation.ts
-- [ ] Components have single responsibility
-- [ ] No Redux/Zustand added without justified reason
-- [ ] Imports follow the defined order
-
-## Meta — Evolution
-If a pattern emerges that doesn't fit this structure →
-report with **[SKILL UPDATE SUGGESTED]** indicating:
-- The pattern and why it's better
-- Whether it's an extension or breaking change
+- [ ] Raw external I/O is not scattered through UI code
+- [ ] State uses the narrowest useful scope
+- [ ] Navigation is not hidden inside low-level/domain code
+- [ ] Components have coherent responsibilities
+- [ ] Provider/platform details are isolated where volatility warrants it
+- [ ] Persistent storage is not a competing source of truth

@@ -1,158 +1,38 @@
-# Error Handling Guidelines — Frontend
-version: 1.0
-last-updated: 2026-06
+# Frontend Error Handling Guidelines
+version: 2.0
+last-updated: 2026-08
 changelog:
+  - 2.0: replace Debt Assistant-specific handlers/cases with reusable client error boundaries
   - 1.0: initial version
 
-## When to use this skill
-When writing try/catch blocks, handling API errors,
-showing error messages to the user, or dealing with
-edge cases in async operations.
+Follow `../core/error-handling.md` and `i18n.md`.
 
-## Why
-Centralized error handling avoids duplicating catch logic
-in every screen, ensures consistent user-facing messages,
-and makes error classification predictable.
+## Central classification
+Frontend integrations should translate transport/provider failures into a stable client error model once, close to the integration boundary.
 
-## Rules
+UI code should not parse arbitrary backend message strings to decide behavior.
 
-### Always use the centralized error handler
-NEVER write custom Alert messages for API errors in screens.
-ALWAYS use `mostrarError` from `utils/errorHandler.ts`.
+## Presentation
+Map classified errors to localized user-facing messages/actions at the presentation layer.
 
-✅
-```typescript
-import { mostrarError } from '../../utils/errorHandler';
+Use feature-specific UI when the user can meaningfully recover (retry, re-authenticate, edit invalid input, resolve conflict, continue offline, etc.). Otherwise use the project's standard generic error presentation.
 
-try {
-  await saveDebt(body);
-} catch (error) {
-  mostrarError(error);
-}
-```
+Do not require one global alert/toast component for every platform; require consistent classification and presentation semantics.
 
-❌
-```typescript
-try {
-  await saveDebt(body);
-} catch (error) {
-  Alert.alert('Error', 'Something went wrong. Please try again.');
-}
-```
+## Async state
+Any user-triggered async operation must provide sufficient feedback to prevent duplicate/confusing actions when latency matters. Loading indicators, disabled actions, optimistic updates or background progress are valid depending on the UX.
 
-### Allowed exceptions to the centralized handler
+Always restore transient state on success, failure and cancellation.
 
-**1. Timeout / AbortError** — has its own flow with specific UI:
-```typescript
-} catch (error: any) {
-  if (error?.name === 'AbortError') {
-    Alert.alert(
-      t('recording.timeoutTitle'),
-      t('recording.timeoutDetail'),
-      [{ text: t('recording.createManual'), onPress: handleManual }]
-    );
-    return;
-  }
-  mostrarError(error);
-}
-```
+## Non-critical failures
+A failure may be intentionally non-blocking (analytics, best-effort cache, optional token registration). It still needs an intentional policy: log/telemetry where appropriate and no empty catch.
 
-**2. User dismissed share sheet** — not an error, navigate normally:
-```typescript
-} catch (error: any) {
-  if (error?.message === 'User did not share') {
-    navigation.navigate('PendingDebts');
-    return;
-  }
-  mostrarError(error);
-}
-```
-
-**3. Duplicate debt (409)** — needs specific UI with actions:
-```typescript
-import { classifyError } from '../../utils/errorHandler';
-
-} catch (error: any) {
-  const classified = classifyError(error);
-  if (classified.tipo === 'duplicado') {
-    Alert.alert(t('common.warning'), t('confirmation.duplicateDetail'), [
-      { text: t('confirmation.merge'), onPress: () => handleDuplicate() },
-      { text: t('common.cancel'), style: 'cancel' },
-    ]);
-    return;
-  }
-  mostrarError(error);
-}
-```
-
-### Always show loading state during async operations
-
-✅
-```typescript
-const [isSaving, setIsSaving] = useState(false);
-
-const handleSave = async () => {
-  setIsSaving(true);
-  try {
-    await saveDebt(body);
-    navigation.navigate('PendingDebts');
-  } catch (error) {
-    mostrarError(error);
-  } finally {
-    setIsSaving(false);
-  }
-};
-```
-
-❌
-```typescript
-const handleSave = async () => {
-  await saveDebt(body); // no loading state
-  navigation.navigate('PendingDebts');
-};
-```
-
-### Never swallow errors silently
-If you catch an error and don't show it to the user,
-log it explicitly and document why it's intentional.
-
-✅
-```typescript
-} catch (error) {
-  // Push token registration is non-critical — silent failure is intentional
-  console.log('Push token registration failed:', error);
-}
-```
-
-❌
-```typescript
-} catch (error) {
-  // empty catch — why? what happened?
-}
-```
-
-## Error types reference
-See `utils/errorHandler.ts` for the full list of error types:
-- `network` — connection error
-- `server` — 500 error
-- `unauthorized` — 401 error
-- `notFound` — 404 error
-- `validation` — 400 error
-- `duplicate` — 409 error
-- `unknown` — any other error
+## Connectivity/offline
+When the product supports offline/degraded behavior, network failure should be distinguishable from server/business failure so the UI can offer the correct recovery path.
 
 ## Checklist
-- [ ] No custom Alert messages for API errors
-- [ ] mostrarError used for all unhandled API errors
-- [ ] AbortError handled separately with timeout UI
-- [ ] 'User did not share' handled without showing error
-- [ ] 409 handled with duplicate-specific UI
-- [ ] Loading state shown during all async operations
-- [ ] Silent catches are documented with a comment
-
-## Meta — Evolution
-If a new error case needs special handling →
-report with **[SKILL UPDATE SUGGESTED]** indicating:
-- The error case
-- The proposed handling approach
-- Whether it's an extension or correction
+- [ ] Transport/provider failures become stable client classifications
+- [ ] UI does not branch on arbitrary backend message text
+- [ ] User messages/actions are localized and appropriate to recovery
+- [ ] Async operations expose adequate progress/disabled/optimistic state
+- [ ] Non-critical failures are intentional, not silently swallowed

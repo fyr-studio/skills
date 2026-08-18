@@ -1,62 +1,38 @@
 # Frontend Skills — Orchestrator
-version: 1.0
-last-updated: 2026-06
+version: 2.0
+last-updated: 2026-08
 changelog:
+  - 2.0: remove product/framework-specific assumptions and align frontend guidance with core standards
   - 1.0: initial version
 
-## When to use this skill
-Any task that involves writing, modifying or reviewing
-frontend code in Fyr Studio projects.
+## When to use
+Use for any task that designs, writes, modifies or reviews user-facing client/UI code.
 
-## Why
-This file acts as the single entry point for all frontend
-skills. The AI reads it first and decides which skills to
-load based on the task, avoiding loading unnecessary context.
+## Required core skills
+Read `../core/index.md` first, then load every relevant core skill.
 
-## How to use
-
-Based on the task, read the corresponding skill before
-writing any code:
-
-| Task | Skill |
+## Frontend skills
+| Concern | Skill |
 |---|---|
-| Naming variables, functions, components, files | `naming.md` |
-| Defining architecture, patterns, folder structure | `architecture.md` |
-| Handling errors, catches, error messages | `error-handling.md` |
-| Styles, colors, UI, visual components | `styling.md` |
-| Texts, translations, languages | `i18n.md` |
-| Generating or modifying tests | `test-generator.md` |
+| Client/UI boundaries, state, services, navigation | `architecture.md` |
+| Frontend identifiers/files/components | `naming.md` |
+| User-visible and async error behavior | `error-handling.md` |
+| Visual consistency/design-system implementation | `styling.md` |
+| UI localization implementation | `i18n.md` |
+| Frontend testing | `test-generator.md` |
 
-For tasks involving multiple areas, read all relevant
-skills before writing code.
+## Rules
+- Follow the project's chosen platform/framework; do not assume React, Expo, Unity, web or a state library from this repository alone.
+- Apply core standards first; this layer adapts them to client/UI concerns.
+- Prefer platform-native capabilities when they satisfy the requirement cleanly.
+- Do not introduce a new state, navigation, styling or networking framework without a design reason.
+- Preserve explicit project constraints and documented exceptions.
 
-## Current stack
-- React Native + Expo (TypeScript)
-- React Navigation (Stack)
-- i18next
-- AsyncStorage
-- Supabase Auth
-
-> ⚠️ Legacy exception: Debt Assistant (frontend & backend) uses
-> Spanish for variables and comments. All new projects follow
-> English conventions as defined in naming.md.
-
-⚠️ If the stack changes, update this file and the affected
-skills with the corresponding change type (Breaking if it
-affects core conventions).
-
-## Global checklist
-Before delivering any frontend code verify:
-- [ ] All relevant skills were read for the task
-- [ ] Code follows naming.md conventions
-- [ ] Architecture follows architecture.md
-- [ ] Errors follow error-handling.md
-- [ ] Texts use i18n according to i18n.md
-- [ ] Styles follow styling.md
+## Checklist
+- [ ] Core orchestrator and relevant core skills read
+- [ ] Relevant frontend skills read
+- [ ] No framework/product assumptions invented
+- [ ] UI behavior, localization and errors follow Fyr Studio standards
 
 ## Meta — Evolution
-If a task does not fit any existing skill →
-report with **[SKILL UPDATE SUGGESTED]** indicating:
-- What new area needs its own skill
-- Whether it's an extension, correction or breaking change
-- Suggested version
+Use **[SKILL UPDATE SUGGESTED]** only for reusable frontend guidance, never for product-specific screens or domain rules.

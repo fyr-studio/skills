@@ -1,247 +1,53 @@
-# Architecture Guidelines — Backend
-version: 2.0
+# Backend Architecture Guidelines
+version: 3.0
 last-updated: 2026-08
 changelog:
-  - 2.0: replace legacy Shared/BaseController architecture with modular monolith + Clean Architecture, CQRS boundaries, module-owned DI and explicit cross-module facades
+  - 3.0: generalize modular/clean architecture guidance across backend stacks
+  - 2.0: modular monolith + Clean Architecture/CQRS guidance
   - 1.0: initial version
 
-## When to use this skill
-When creating or refactoring backend modules, endpoints, use cases, services,
-folder structure, dependency injection, module boundaries, or cross-module
-communication.
+Follow `../core/architecture.md` and `../core/engineering-principles.md`.
 
-## Why
-Fyr Studio backends should stay simple enough for one developer to maintain while
-keeping business boundaries clean enough to scale without a structural rewrite.
-The default is a modular monolith: one deployable, explicit modules, clean
-dependency direction, and no premature distributed-system complexity.
+## Default topology
+Use one deployable modular backend until concrete operational evidence justifies extraction.
 
-Project-specific architecture documented in the repository may refine these
-rules. Do not silently override an explicit project decision with a generic skill.
+## Module layers
+When useful, a business module may separate:
+- Domain — entities/value objects/invariants/business rules;
+- Application — use cases and ports/contracts;
+- Infrastructure — database/provider/external I/O adapters;
+- Presentation/Transport — HTTP/RPC/message handlers.
 
-## Core rules
+Names/folders may vary by stack. Do not create empty layers just to mimic the model.
 
-### Modular monolith by default
-Do not introduce microservices because a product may scale someday.
+Dependency direction is inward: business rules do not depend on frameworks, transports, databases or provider SDKs.
 
-Keep one deployable backend until there is concrete evidence that a module needs
-independent deployment, ownership, scaling, isolation, or technology choices.
+## Use-case orchestration
+Prefer explicit use cases/handlers over god services that accumulate unrelated operations.
 
-A future extraction path is a benefit of good module boundaries, not a reason to
-create distributed infrastructure now.
+CQRS/mediator libraries are optional implementation patterns. If a project uses them, keep commands/queries at the application boundary and avoid turning the pattern into deep ceremony.
 
-### Clean Architecture inside each business module
-The standard module shape is:
+## Transport adapters
+Controllers/routes/resolvers/message handlers should translate transport input to application use cases and translate results back. They should not own business invariants or repository/provider coordination.
 
-```text
-Modules/
-  <Module>/
-    Domain/
-    Application/
-    Infrastructure/
-    Presentation/
-    DependencyInjection.cs
-    IPublic<Module>.cs        # optional — only when another module consumes it
-```
+## Cross-module access
+Do not reach into another module's persistence/domain internals. Expose the smallest stable public capability/contract required by the consumer.
 
-Do not create empty folders merely to satisfy the diagram. Add a layer when the
-module actually has code owned by that layer.
+Do not create public facades speculatively for every module.
 
-Responsibilities:
+## Composition
+Keep dependency registration/composition explicit and organized by module/feature where the framework supports it. Avoid a root bootstrap file that knows every implementation detail when modules can register themselves cleanly.
 
-- `Domain` — business entities, value objects, invariants, domain-specific errors.
-- `Application` — use cases, commands/queries, handlers, validators, repository
-  ports and application contracts.
-- `Infrastructure` — Dapper/Npgsql repositories, external providers, file/network
-  integrations and implementations of Application ports.
-- `Presentation` — ASP.NET controllers and HTTP transport concerns.
-- `DependencyInjection.cs` — registrations owned by that module.
+## Background work
+Recurring/async workers belong to the module that owns the behavior. Separate scheduling/loop mechanics from one iteration/use case so it remains testable.
 
-Dependency direction:
-
-```text
-Presentation -> Application -> Domain
-Infrastructure -> Application / Domain
-```
-
-Forbidden:
-
-```text
-Domain -> Infrastructure
-Domain -> Presentation
-Application -> Presentation
-Application -> ASP.NET HTTP types
-```
-
-Domain code must not depend on Dapper, Npgsql, HTTP, configuration providers,
-external SDKs, or mediator libraries.
-
-### CQRS without Vertical Slice ceremony
-For projects using CQRS, commands and queries live inside the module's
-`Application` layer and handlers own individual use cases.
-
-Prefer explicit command/query handlers over large application `Service` classes
-that accumulate unrelated use cases.
-
-Do not interpret CQRS as a requirement to create a deep folder tree per feature.
-Use the simplest organization that keeps commands, queries, validators and
-handlers discoverable.
-
-Mediator libraries are implementation details. Respect the package/version pinned
-by the project and do not perform major upgrades without an explicit design
-review.
-
-### Thin controllers
-Controllers are HTTP adapters.
-
-They should typically:
-1. read route/body/query transport input;
-2. construct a command/query;
-3. send it through the application mediator;
-4. return the successful result.
-
-Controllers must not:
-- contain business rules;
-- access repositories directly;
-- open database transactions;
-- call AI/external providers directly;
-- repeat tenant/business authorization logic;
-- contain repetitive try/catch blocks;
-- coordinate multi-module writes themselves.
-
-Do not introduce a shared `BaseController` for domain validation, tenant lookup,
-localization, or authentication. Put those concerns in the correct middleware,
-pipeline behavior, module, or service.
-
-### Common is infrastructure, not shared business code
-When a project uses a common cross-cutting area, use narrowly owned categories
-such as:
-
-```text
-Common/
-  Authentication/
-  Cqrs/
-    Behaviors/
-  Database/
-  Errors/
-  Web/
-```
-
-`Common` means **no business module owns this concern**. It does not mean "used by
-multiple modules".
-
-Do not recreate dumping grounds such as:
-
-```text
-Shared/Models
-Shared/DTOs
-Shared/Contracts
-Common/Models
-Common/DTOs
-Common/Contracts
-Helpers
-Utils
-```
-
-If a type has business meaning, put it in the module that owns that meaning.
-
-### Cross-module communication uses explicit public facades
-A module must not consume another module's internal Domain, Application,
-Infrastructure, repositories, or internal services.
-
-When module A genuinely needs module B, B may expose one minimal root-level
-facade:
-
-```text
-Modules/Contacts/IPublicContact.cs
-Modules/Billing/IPublicBilling.cs
-```
-
-Convention:
-- singular name: `IPublicContact`, not `IPublicContacts`;
-- create it only after a real cross-module dependency exists;
-- expose the smallest stable capability the consumer needs;
-- return small public contract records, not Domain entities;
-- do not simply expose internal repositories/services through properties;
-- small public records may live in the same file until growth justifies a folder.
-
-Another module should depend only on that explicit public contract.
-
-Do not create `IPublicX` speculatively for every module.
-
-### Business/tenant scope is explicit
-If a product has tenant/business-scoped data, the tenant/business identifier
-should be explicit in the use case/API rather than inferred from "the only one"
-when the domain may support multiple later.
-
-Authentication establishes identity. The owning business/tenant module establishes
-access to a scoped resource. Do not combine authentication identity, tenant,
-billing and business profile into one god-object.
-
-Repeated scope authorization belongs in middleware/pipeline behavior owned by the
-relevant module, not duplicated in each handler.
-
-### Module-owned dependency injection
-Keep `Program.cs` compositional and small.
-
-Each module registers its own internals in its `DependencyInjection.cs`.
-A root composition extension may call module registrations, but it should not
-know every repository implementation inside every module.
-
-Conceptually:
-
-```csharp
-builder.Services
-    .AddApi(builder.Configuration)
-    .AddAuthentication(builder.Configuration)
-    .AddDatabase(builder.Configuration)
-    .AddApplication()
-    .AddModules(builder.Configuration);
-```
-
-Do not put dozens of `AddScoped` registrations directly in `Program.cs`.
-
-### Background services belong to a module
-Use `BackgroundService` for recurring in-process work when that is sufficient.
-The worker and its registration belong to the module that owns the behavior.
-
-Do not keep a worker alive by swallowing cancellation. Handle operational
-failures, log them, and allow requested shutdown to propagate.
-
-### Avoid speculative patterns
-Do not add aggregates, factories, domain events, message buses, generic
-repositories, generic UnitOfWork abstractions, or extra assemblies just because
-they are common architecture vocabulary.
-
-Introduce a pattern when it solves a real rule or coupling problem.
-
-## Extraction rule
-Consider extracting a module from the monolith only when evidence justifies the
-operational cost, for example:
-- materially different scaling requirements;
-- independent deployment is repeatedly needed;
-- stronger fault/security isolation is required;
-- a separate team or ownership boundary exists;
-- a technology constraint cannot reasonably live in the monolith.
-
-One signal alone is not automatically sufficient. Compare the operational cost
-before extracting.
+## Extraction
+Consider another service/process only for concrete scaling, fault/security isolation, independent deployment, ownership or technology constraints that outweigh operational cost.
 
 ## Checklist
-- [ ] Modular monolith remains the default unless extraction is justified
-- [ ] Each module follows clean dependency direction
-- [ ] Controllers are thin HTTP adapters
-- [ ] Application use cases do not depend on HTTP
-- [ ] Business types are owned by modules, not Common/Shared dumping grounds
-- [ ] Cross-module dependencies use a minimal `IPublic<Module>` facade when needed
-- [ ] No speculative `IPublicX` files were created
-- [ ] Program.cs is compositional; module DI stays module-owned
-- [ ] Tenant/business access is not inferred from client-supplied identity
-- [ ] No architecture pattern was added without a concrete problem
-
-## Meta — Evolution
-If a new architectural pattern is needed →
-report with **[SKILL UPDATE SUGGESTED]** indicating:
-- the pattern and the problem it solves;
-- why the existing architecture does not cover it;
-- whether it is an extension, correction or breaking change.
+- [ ] One deployable remains default
+- [ ] Business rules depend inward
+- [ ] Transport adapters stay thin
+- [ ] Use cases are explicit/cohesive
+- [ ] Cross-module access uses minimal public contracts
+- [ ] No CQRS/messaging/distribution added ceremonially

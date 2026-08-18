@@ -1,151 +1,48 @@
-# Styling Guidelines — Frontend
-version: 1.0
-last-updated: 2026-06
+# Frontend UI & Styling Guidelines
+version: 2.0
+last-updated: 2026-08
 changelog:
+  - 2.0: replace fixed Debt Assistant palette/React Native mechanics with reusable design-system guidance
   - 1.0: initial version
 
-## When to use this skill
-When writing styles, choosing colors, building UI components,
-or making visual decisions in frontend code.
+## Goal
+Keep UI consistent, accessible and maintainable without forcing the visual identity or styling API of one product onto another.
 
-## Why
-Consistent styling makes the app feel native and professional.
-A shared color palette and spacing system reduces visual
-inconsistency and speeds up development.
+## Design tokens
+Recurring visual decisions should come from the project's design system/tokens when scale justifies them:
+- colors/semantic roles;
+- typography;
+- spacing;
+- radius;
+- elevation/shadow;
+- motion where relevant.
 
-## Rules
+Do not hardcode a global Fyr Studio product palette. Each product owns its visual identity; the engineering standard is to centralize repeated design decisions rather than scatter magic values.
 
-### Always use StyleSheet.create()
-NEVER use inline styles except for dynamic values.
+## Semantic styling
+Prefer semantic roles such as `primary`, `surface`, `error`, `success`, `textSecondary` over binding reusable components directly to arbitrary literal colors.
 
-✅
-```typescript
-<View style={styles.container}>
-  <Text style={styles.title}>Hello</Text>
-</View>
+## Platform conventions
+Use the styling/layout mechanism appropriate to the project platform (CSS/design tokens, React Native styles, Unity UI Toolkit/UGUI, native views, etc.). Do not prescribe `StyleSheet.create`, `FlatList`, CSS modules or another framework globally.
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
-  title: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
-});
-```
+## Accessibility
+Where the platform supports it:
+- maintain usable contrast;
+- support dynamic text/scaling when product UX permits;
+- expose accessibility labels/roles for interactive controls;
+- preserve focus/keyboard/controller navigation where relevant;
+- do not rely on color alone to communicate critical state.
 
-❌
-```typescript
-<View style={{ flex: 1, backgroundColor: '#F5F5F5' }}>
-  <Text style={{ fontSize: 20 }}>Hello</Text>
-</View>
-```
+## Responsive/adaptive layout
+Design for the project's supported device/window range. Avoid unexplained pixel assumptions when content can vary by locale, font scaling or viewport.
 
-✅ Exception — dynamic values only:
-```typescript
-<View style={[styles.button, { backgroundColor: color }]}>
-```
-
-### Color palette
-NEVER use hardcoded colors outside this palette.
-
-| Token | Hex | Usage |
-|---|---|---|
-| Primary | `#1565C0` | Buttons, links, active states |
-| Error / Action | `#D32F2F` | Errors, destructive actions, recording |
-| Warning | `#F57C00` | Warnings, partial payments |
-| Success | `#2E7D32` | Paid state, success messages |
-| Background | `#F5F5F5` | Screen backgrounds |
-| Surface | `#FFFFFF` | Cards, modals, inputs |
-| Text Primary | `#1A1A1A` | Main text |
-| Text Secondary | `#666666` | Secondary text, labels |
-| Text Disabled | `#999999` | Placeholders, disabled states |
-| Border | `#E0E0E0` | Dividers, borders |
-
-✅ `backgroundColor: '#1565C0'`
-❌ `backgroundColor: '#0000FF'` ← not in palette
-
-### StyleSheet location
-Always at the bottom of the file, after the component.
-
-✅
-```typescript
-export const MyComponent = () => { ... };
-
-const styles = StyleSheet.create({ ... });
-```
-
-❌
-```typescript
-const styles = StyleSheet.create({ ... });
-
-export const MyComponent = () => { ... };
-```
-
-### Elevation and shadows
-Use elevation for Android cards and modals.
-Always pair with shadow props for iOS compatibility.
-
-✅
-```typescript
-card: {
-  elevation: 2,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.08,
-  shadowRadius: 4,
-},
-```
-
-### Border radius
-Use consistent border radius values:
-- Small elements (badges, chips): `8`
-- Cards and inputs: `12`
-- Buttons: `12`
-- Modals (top corners only): `20`
-
-### Typography scale
-| Usage | Size | Weight |
-|---|---|---|
-| Screen title | 20-24 | 700 |
-| Card title | 15-17 | 700 |
-| Body | 14-16 | 400-500 |
-| Label / Caption | 12 | 400 |
-| Button | 15-17 | 600-700 |
-
-### Spacing
-Use multiples of 4 for padding and margin:
-`4, 8, 12, 16, 20, 24, 32, 48`
-
-### Performance
-- Use `FlatList` for lists — NEVER `map()` inside `ScrollView`
-- Set explicit dimensions on images
-- Avoid anonymous functions in render for frequently updated lists
-
-✅
-```typescript
-<FlatList
-  data={debts}
-  keyExtractor={(item) => item.id}
-  renderItem={({ item }) => <DebtCard debt={item} />}
-/>
-```
-
-❌
-```typescript
-<ScrollView>
-  {debts.map((debt) => <DebtCard key={debt.id} debt={debt} />)}
-</ScrollView>
-```
+## Reuse
+Create reusable components/tokens for patterns that genuinely repeat and should evolve together. Do not create a design-system abstraction for a one-off view prematurely.
 
 ## Checklist
-- [ ] No inline styles except dynamic values
-- [ ] All colors from the defined palette
-- [ ] StyleSheet.create() at the bottom of the file
-- [ ] Cards have elevation + shadow
-- [ ] Lists use FlatList not map() in ScrollView
-- [ ] Typography follows the defined scale
-- [ ] Spacing uses multiples of 4
-
-## Meta — Evolution
-If a new UI pattern emerges not covered here →
-report with **[SKILL UPDATE SUGGESTED]** indicating:
-- The pattern
-- Proposed styling approach
-- Whether it's an extension or correction
+- [ ] Repeated visual values use project-owned tokens/design system
+- [ ] Product palette is not embedded in generic skills
+- [ ] Styling mechanism matches the platform
+- [ ] Accessibility requirements considered
+- [ ] Layout tolerates supported viewports and localized string length
+- [ ] Reuse follows real repetition, not speculation

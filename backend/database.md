@@ -1,226 +1,58 @@
 # Database Guidelines — Backend
-version: 2.0
+version: 3.0
 last-updated: 2026-08
 changelog:
-  - 2.0: align Dapper/Npgsql access with Clean Architecture, explicit transaction boundaries, project-owned schema policy and repository ownership
-  - 1.1: require production schema changes to be reproducible and versioned
+  - 3.0: generalize relational persistence guidance beyond PostgreSQL/Dapper while preserving correctness standards
+  - 2.0: Clean Architecture transaction/concurrency/schema guidance
   - 1.0: initial version
 
-## When to use this skill
-When writing SQL, repositories, database session/transaction infrastructure,
-Dapper mappings, schema changes, or PostgreSQL persistence code.
+Follow `../core/architecture.md` and `../core/testing.md`.
 
-## Why
-Database access should stay explicit and auditable without leaking PostgreSQL or
-Npgsql concerns into Application/Domain code. Correct transaction boundaries and
-project-owned schema conventions matter more than imposing one persistence pattern
-on every project.
+## Project stack first
+Inspect and follow the database, ORM/query library and schema-management workflow chosen by the project. Do not introduce another persistence stack merely because a skill example used it.
 
-## Default stack
-- PostgreSQL
-- Dapper over Npgsql
-- Raw SQL, unless the project explicitly chooses another persistence stack
+## Persistence boundaries
+Domain/application code should depend on persistence contracts/capabilities, not concrete database connections, ORM sessions or provider exceptions when that coupling can reasonably be isolated.
 
-Always follow the repository's documented stack and schema-management policy.
+Persistence contracts belong to the module/use case that owns the concept, not a global generic repository folder.
 
-## SQL rules
+Do not mandate one repository per table or a generic `Repository<T>` pattern.
 
-### Explicit SELECT columns and aliases
-Avoid `SELECT *` in application queries.
-
-Alias snake_case database columns to the C# property names expected by Dapper.
-
-```sql
-SELECT
-    id          AS Id,
-    business_id AS BusinessId,
-    created_at  AS CreatedAt
-FROM debts
-WHERE id = @DebtId;
-```
-
-### Parameterize all values
-Never concatenate untrusted or runtime values into SQL.
-
-```csharp
-await connection.QuerySingleOrDefaultAsync<DebtRecord>(
-    sql,
-    new { DebtId = debtId },
-    transaction: transaction);
-```
-
-Identifiers that cannot be parameterized (for example a dynamic ORDER BY column)
-must come from an explicit allow-list, never raw client input.
-
-### Choose the query API that matches cardinality
-Use APIs whose semantics match the expected result:
-- `QuerySingleAsync` when exactly one row must exist;
-- `QuerySingleOrDefaultAsync` when zero or one row is valid;
-- `QueryAsync` for collections;
-- `ExecuteAsync` for non-query commands.
-
-Do not allocate a collection just to call `FirstOrDefault()` for a single-row
-lookup.
-
-### PostgreSQL types
-Use Npgsql-supported CLR mappings appropriate to the installed Npgsql version.
-Do not copy historical conversion workarounds without verifying that they are
-still required by the current package/version and target column type.
-
-Be explicit about UTC vs local business dates:
-- instants/events should normally be stored as UTC timestamps;
-- local calendar dates/times that are business rules may intentionally use
-  PostgreSQL `date`/`time` types;
-- do not convert a local-business rule to UTC merely because UTC is the default
-  for timestamps.
-
-## Repository ownership
-Repository interfaces belong to the owning module's Application layer.
-Implementations belong to that module's Infrastructure layer.
-
-```text
-Modules/Debts/
-  Application/
-    IDebtRepository.cs
-  Infrastructure/
-    DebtRepository.cs
-```
-
-Do not place repository interfaces in a global Shared/Common contracts folder.
-
-Do not use generic repositories (`IRepository<T>`, `IBaseRepository`) unless a
-project has a proven, explicit need.
-
-### Repository granularity
-Do not enforce "exactly one repository per table".
-
-A repository is an application/domain persistence port, not a table wrapper.
-Its shape should follow cohesive use cases and module ownership while keeping SQL
-inside Infrastructure.
-
-A repository may query several tables when that is necessary to materialize the
-concept it owns. Conversely, one large table may justify multiple focused query
-components when that produces clearer responsibilities.
-
-Repositories must not contain domain decision-making solely because the data is
-available there.
-
-## Clean Architecture boundary
-Application and Domain code should not directly depend on:
-- `NpgsqlConnection`;
-- `NpgsqlTransaction`;
-- Dapper static extension methods;
-- PostgreSQL-specific exception types unless translated at the infrastructure
-  boundary.
-
-Infrastructure owns those details.
-
-For projects needing shared transaction participation, a small project-owned
-database-session abstraction may live in a cross-cutting database area.
-Avoid a large generic UnitOfWork abstraction unless it solves a concrete problem.
+## Queries
+- Select only needed fields when the query technology makes that practical.
+- Parameterize runtime values; never concatenate untrusted input into query text.
+- Use APIs whose cardinality/semantics match the expected result.
+- Keep business decision-making out of low-level data-access code.
 
 ## Transactions
-Use a transaction when several writes must succeed or fail atomically.
+Use a transaction for operations whose writes must succeed/fail atomically.
 
-When the project uses CQRS, prefer transaction management at the application
-pipeline/use-case boundary for commands explicitly marked as transactional.
+Choose the transaction boundary at the application/use-case level so participating persistence operations share it.
 
-Do not automatically wrap every command in a database transaction.
-External calls (AI, push, payment providers, HTTP APIs) can make a blanket
-transaction dangerously long-lived.
+Do not hold database transactions open across slow external calls unless the design explicitly requires it and the trade-off is understood.
 
-Conceptually:
+## Concurrency
+Protect invariants with the database's available correctness mechanisms: unique/foreign/check constraints, optimistic concurrency/versioning, atomic updates, locks, idempotency keys and suitable isolation.
 
-```text
-Transactional command
-  -> transaction behavior
-  -> begin
-  -> handler
-  -> repositories share current session/transaction
-  -> commit
+Do not rely on unprotected read-then-write sequences when concurrent requests can invalidate the decision.
 
-failure -> rollback -> rethrow
-```
-
-Do not open an independent transaction inside each repository when one application
-operation must be atomic across repositories.
-
-## Concurrency and correctness
-When correctness depends on current database state, use PostgreSQL concurrency
-controls deliberately:
-- unique constraints;
-- foreign keys;
-- check constraints;
-- row locks where appropriate;
-- atomic update/insert statements;
-- idempotency constraints/keys;
-- transaction isolation appropriate to the invariant.
-
-Do not rely on a prior `SELECT` followed by an unprotected write when concurrent
-requests can invalidate the decision.
+## Time
+Store instants in an unambiguous form (normally UTC) while preserving local calendar dates/times when the business rule itself is local. Do not convert a local-calendar rule into an instant without reason.
 
 ## Delete semantics
-Do not impose a universal "never hard delete" rule.
-
-Use the deletion semantics defined by the domain and schema:
-- cancellation/state transition when history must be retained;
-- archive when records remain addressable;
-- purge/hard delete when the product explicitly defines permanent removal.
-
-Never substitute soft-delete flags for a product requirement without design
-approval.
+Hard delete, archive, soft delete or state transition is a domain/product decision. Do not impose one universal deletion policy.
 
 ## Schema source of truth
-Every project must define where its authoritative schema lives.
+Every project must have exactly one explicit authoritative schema/migration source and a reproducible process for applying changes. Do not create a competing source of truth.
 
-Follow that project-specific policy exactly.
-
-Possible valid policies include:
-- migrations committed with the backend;
-- a dedicated database repository;
-- one living schema file maintained outside the application repository;
-- an infrastructure project/tooling directory.
-
-Do not create a new migration framework or duplicate schema files merely because
-this generic skill prefers reproducibility.
-
-The non-negotiable requirement is that the project has one explicit source of
-truth and changes are reproducible from it.
-
-If SQL is applied manually:
-1. update the project's authoritative schema/migration source as required by its
-   documented workflow;
-2. distinguish planned SQL from already-applied SQL;
-3. never claim an environment was changed unless it actually was;
-4. do not create a second competing schema source.
-
-If repository guidance conflicts with this generic skill, the explicit
-project-specific schema policy wins.
-
-## Error handling
-Translate provider/database-specific failures at the Infrastructure/Application
-boundary when they have meaningful application semantics.
-
-Example: a known unique-constraint race may become a `ConflictException`.
-
-Do not expose raw PostgreSQL/Npgsql exception messages to HTTP clients.
+## Error translation
+Translate database/provider errors when they represent stable application semantics (for example known uniqueness/concurrency conflict). Never expose raw database diagnostics to clients.
 
 ## Checklist
-- [ ] SELECTs use explicit columns and Dapper aliases
-- [ ] Runtime values are parameterized
-- [ ] Query APIs match expected cardinality
-- [ ] Repository interfaces live in the owning module's Application layer
-- [ ] Repository implementations/SQL live in Infrastructure
-- [ ] No generic repository/table-wrapper pattern was added without need
-- [ ] Application/Domain do not depend directly on Npgsql/Dapper infrastructure
-- [ ] Multi-write invariants use explicit transaction/concurrency protection
-- [ ] External I/O is not accidentally held inside blanket DB transactions
-- [ ] Delete behavior follows the domain rather than a universal soft-delete rule
-- [ ] Schema changes update the project's one authoritative source of truth
-- [ ] No duplicate schema source was created
-
-## Meta — Evolution
-If a new database pattern is needed →
-report with **[SKILL UPDATE SUGGESTED]** indicating:
-- the pattern and problem it solves;
-- whether it is an extension, correction or breaking change.
+- [ ] Project persistence stack followed
+- [ ] Domain/application isolated from unnecessary provider details
+- [ ] Runtime query values parameterized
+- [ ] Transaction boundary matches the invariant
+- [ ] External I/O not accidentally inside long transactions
+- [ ] Concurrency-sensitive invariants protected atomically
+- [ ] One authoritative reproducible schema source exists
