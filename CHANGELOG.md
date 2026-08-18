@@ -5,6 +5,17 @@ For the specific changelog of each skill, see the file header.
 
 ## 2026-08
 
+### Cross-project standards foundation
+- Added `core/` as the authoritative home for reusable Fyr Studio engineering standards.
+- Added `core/index.md` v1.0 orchestrator and explicit precedence: current-task decision > documented project exception/ADR > Fyr Studio standard > framework convention > incidental legacy code.
+- Added `core/engineering-principles.md` v1.0: design before code, investigation before assumptions, scope discipline and no speculative complexity.
+- Added `core/architecture.md` v1.0: reusable separation-of-concerns, dependency direction, module ownership and evidence-based scaling guidance.
+- Added `core/naming.md` v1.0: English-first, intent-based, ecosystem-aware naming.
+- Added `core/error-handling.md` v1.0: structured classification, safe boundaries, bounded retries and cancellation rules.
+- Added `core/testing.md` v1.0: risk-based, behavior-focused, deterministic test strategy.
+- Added `core/localization.md` v1.0: English is the canonical source/fallback; semantic keys; production locale completeness; bundled client core localization; locale-aware formatting; API machine-readable codes; server localization only for server-delivered human content.
+- Reframed `README.md` so skills define Fyr Studio standards rather than product-specific implementation details.
+
 ### Backend architecture v2
 - `backend/index.md` v2.0: project-specific decisions now override generic skills; backend defaults aligned with modular monolith + Clean Architecture.
 - `backend/architecture.md` v2.0: removed legacy `Shared`, `BaseController`, Merchant validation and controller/repository business-logic guidance; added Clean Architecture per module, CQRS boundaries, module-owned DI, thin controllers and minimal `IPublic<Module>` cross-module facades.
