@@ -43,9 +43,11 @@ skills/
 │   ├── index.md
 │   ├── engineering-principles.md
 │   ├── architecture.md
+│   ├── git-workflow.md
 │   ├── naming.md
 │   ├── error-handling.md
 │   ├── testing.md
+│   ├── verification.md
 │   └── localization.md
 ├── frontend/
 │   ├── index.md
@@ -63,11 +65,12 @@ skills/
 │   ├── database.md
 │   ├── localization.md
 │   └── test-generator.md
+├── agents/
 ├── README.md
 └── CHANGELOG.md
 ```
 
-`core/` owns standards that should not be redefined independently by frontend/backend skills. Frontend/backend skills adapt those standards to their layer without changing their intent.
+`core/` owns standards that should not be redefined independently by frontend/backend or agent-specific skills. Frontend/backend skills adapt those standards to their layer without changing their intent. Agent-specific files may adapt invocation/configuration, but reusable engineering policy belongs in `core/`.
 
 ## Versioning
 
@@ -76,29 +79,48 @@ Each skill has its own semantic version:
 | Type | When | Version |
 |---|---|---|
 | Patch | wording/example only, no rule change | `1.1.0 -> 1.1.1` |
-| Minor | compatible extension or clarification | `1.1 -> 1.2` |
-| Major | core convention changes or prior guidance becomes invalid | `1.x -> 2.0` |
+| Minor | compatible extension or clarification | `1.1.0 -> 1.2.0` |
+| Major | core convention changes or prior guidance becomes invalid | `1.x -> 2.0.0` |
 
-Existing historical files may use `1.0`/`2.0`; continue semantic intent even when patch precision is omitted.
+Existing historical files may use shortened versions such as `1.0`/`2.0`; new updates should prefer full semantic versions.
 
 ## Integration in projects
 
-### Git submodule
+Fyr Studio keeps one shared local checkout of this repository instead of adding it as a submodule to every product repository.
+
+Canonical Windows location:
+
+```text
+C:\Proyectos\skills
+```
+
+Clone it once:
 
 ```bash
-git submodule add https://github.com/fyr-studio/skills skills
-git submodule update --remote
+git clone https://github.com/fyr-studio/skills C:\Proyectos\skills
 ```
 
-### Agent entry point
+Update it independently when standards change:
 
-Project instructions should tell the coding agent to read the relevant orchestrator before implementation, for example:
+```bash
+cd C:\Proyectos\skills
+git pull origin main
+```
+
+Product repositories should not duplicate these files or vendor them as submodules. Their `AGENTS.md`/agent entry point should reference the shared checkout directly and add only product-specific instructions/exceptions.
+
+Example:
 
 ```markdown
-Read `skills/frontend/index.md` for frontend work and `skills/backend/index.md` for backend work.
+Before implementation, read `C:\Proyectos\skills\core\index.md` and every core/layer skill it marks as relevant to the task.
+
+For frontend work, also read `C:\Proyectos\skills\frontend\index.md`.
+For backend work, also read `C:\Proyectos\skills\backend\index.md`.
+
+Project-specific instructions in this repository take precedence only where documented by the Fyr Studio precedence rules.
 ```
 
-The orchestrator then loads required core and layer-specific skills.
+A machine with a different workspace root may use a different absolute path, but each product should still reference one external shared checkout rather than maintaining duplicated skill copies.
 
 ## Evolution
 
