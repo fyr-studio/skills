@@ -1,8 +1,9 @@
 # Engineering Principles — Core
-version: 1.0
+version: 1.1.0
 last-updated: 2026-08
 changelog:
-  - 1.0: initial standard
+  - 1.1.0: expand implementation delivery report and blocked-validation requirements
+  - 1.0.0: initial standard
 
 ## Why
 Fyr Studio is developed by a solo developer using coding agents. The workflow must reduce rework, prevent agents from making hidden product decisions and keep changes reviewable.
@@ -40,6 +41,8 @@ Do not:
 
 If unrelated problems are discovered, report them separately.
 
+Explicit no-touch boundaries in the task are requirements, not suggestions. Preserve unrelated user work and repository state.
+
 ## Simplicity with an extraction path
 Prefer architecture that is clean enough to evolve without paying complexity costs before evidence exists.
 
@@ -64,13 +67,21 @@ Coding agents may resolve routine implementation details, but they must not inve
 If such a decision is missing, stop that subtask and report the ambiguity.
 
 ## Delivery report
-For non-trivial implementation tasks, report together:
-- investigation findings;
-- decisions made and unresolved ambiguities;
-- files changed;
-- verification performed/results;
-- manual wiring or UI/editor/deployment steps still required;
-- unrelated issues noticed but intentionally not changed.
+For non-trivial implementation tasks, provide one final report containing the whole handoff rather than fragmented per-file updates.
+
+Include:
+- investigation findings and relevant existing architecture discovered;
+- decisions made, including how routine ambiguities were resolved;
+- unresolved material ambiguities, if any;
+- files changed and the behavior implemented;
+- verification actually performed, including exact build/test/lint/static-check commands when useful and their results;
+- validation that was attempted but blocked by the environment, stated explicitly as blocked rather than implied as passing;
+- manual wiring or UI/editor/deployment steps still required, or `None`;
+- unrelated issues noticed but intentionally not changed;
+- explicit confirmation of important no-touch boundaries when the task called them out;
+- git metadata required by `git-workflow.md` when git operations are part of the task.
+
+Do not claim tests, builds, UI behavior, Editor wiring or deployment checks passed unless they were actually executed/observed.
 
 ## Checklist
 - [ ] Real ambiguity resolved before implementation
@@ -78,4 +89,6 @@ For non-trivial implementation tasks, report together:
 - [ ] Change stayed inside scope
 - [ ] No speculative complexity added
 - [ ] One source of truth preserved
-- [ ] Verification and manual follow-up reported
+- [ ] Verification and blocked validation are reported accurately
+- [ ] Manual follow-up is explicit
+- [ ] Git handoff metadata is included when applicable
