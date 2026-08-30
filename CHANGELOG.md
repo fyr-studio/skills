@@ -5,6 +5,14 @@ For the specific changelog of each skill, see the file header.
 
 ## 2026-08
 
+### Shared agent workflow v1.1
+- Added `core/git-workflow.md` v1.0.0 with the default task-branch/commit/push/PR workflow, parallel-branch synchronization guidance, git safety rules, and required branch/commit/push/final-status reporting.
+- Added `core/verification.md` v1.0.0 as the agent-agnostic acceptance-criteria verification standard with PASS/FAIL/BLOCKED outcomes and strict separation of manual verification.
+- Updated `core/engineering-principles.md` to v1.1.0 so final implementation reports include actual validation commands/results, blocked validation, manual wiring, scope boundaries and git metadata when applicable.
+- Updated `core/index.md` to v1.1.0 to orchestrate the new git-workflow and verification skills.
+- Reduced `agents/claude/fyr-verification.md` to a Claude-specific wrapper over the shared core verification policy.
+- Replaced the per-project Git-submodule integration guidance with a single shared local checkout, canonically `C:\Proyectos\skills`, referenced directly by each project's `AGENTS.md`.
+
 ### Cross-project standards foundation
 - Added `core/` as the authoritative home for reusable Fyr Studio engineering standards.
 - Added `core/index.md` v1.0 orchestrator and explicit precedence: current-task decision > documented project exception/ADR > Fyr Studio standard > framework convention > incidental legacy code.
