@@ -1,7 +1,8 @@
 # Testing Principles — Core
-version: 1.0
+version: 1.1
 last-updated: 2026-08
 changelog:
+  - 1.1: add explicit deterministic retry-policy testing guidance
   - 1.0: initial cross-platform testing standard
 
 ## Goal
@@ -33,6 +34,13 @@ Tests should survive harmless refactors.
 
 Prefer assertions about observable results, state and contracts over private calls, method order or exact internal SQL/string implementation unless that exact form is contractual.
 
+## Deterministic retry policies
+When retry timing/classification is part of system behavior, isolate the policy from provider/network execution when practical so it can be tested deterministically.
+
+Tests should prove the externally meaningful policy: which failures retry, which are terminal, maximum attempts, and the exact/backoff delays when those delays are contractual. Control the clock rather than sleeping in tests.
+
+Persistence/integration tests should separately verify that retry state survives process restarts when durability is required.
+
 ## Deterministic and isolated
 Tests must not depend on production data, live secrets, real billing providers or uncontrolled network services.
 
@@ -54,6 +62,7 @@ When practical, reproduce a bug with a failing automated test before the fix, th
 - [ ] Highest-risk behavior is covered first
 - [ ] Test level is no larger than necessary
 - [ ] Tests assert behavior, not incidental internals
+- [ ] Retry policy is deterministic/testable when it is contractual
 - [ ] No production/staging data or live secrets are used
 - [ ] Time/random/network dependencies are controlled where needed
 - [ ] Bug fixes add regression coverage when practical
