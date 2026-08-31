@@ -23,6 +23,7 @@ For the specific changelog of each skill, see the file header.
 - Added `core/testing.md` v1.0: risk-based, behavior-focused, deterministic test strategy.
 - Added `core/localization.md` v1.0: English is the canonical source/fallback; semantic keys; production locale completeness; bundled client core localization; locale-aware formatting; API machine-readable codes; server localization only for server-delivered human content.
 - Reframed `README.md` so skills define Fyr Studio standards rather than product-specific implementation details.
+- Updated `core/testing.md` to v1.1 with deterministic retry-policy testing guidance, including contractual delays/classification and controlled time.
 
 ### Frontend standards v2
 - `frontend/index.md` v2.0 now loads core standards and no longer declares React Native/Expo/i18next/Supabase as the Fyr Studio frontend stack.
@@ -41,6 +42,7 @@ For the specific changelog of each skill, see the file header.
 - `backend/database.md` v3.0 preserves transaction/concurrency/schema correctness while removing PostgreSQL/Dapper as universal requirements.
 - `backend/localization.md` v2.0 limits server localization to server-delivered human content and aligns API/client responsibilities with the core standard.
 - `backend/test-generator.md` v3.0 removes xUnit/Moq/.NET assumptions while preserving behavior- and risk-focused testing guidance.
+- Updated `backend/database.md` to v3.1 with explicit claim/lease-before-external-I/O guidance and durable retry-state requirements for background processors.
 
 ### Backend architecture v2 (historical)
 - `backend/index.md` v2.0: project-specific decisions now override generic skills; backend defaults aligned with modular monolith + Clean Architecture.
