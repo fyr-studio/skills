@@ -1,7 +1,8 @@
 # Database Guidelines — Backend
-version: 3.0
+version: 3.1
 last-updated: 2026-08
 changelog:
+  - 3.1: add explicit claim-before-external-I/O and retry-state persistence guidance for background processors
   - 3.0: generalize relational persistence guidance beyond PostgreSQL/Dapper while preserving correctness standards
   - 2.0: Clean Architecture transaction/concurrency/schema guidance
   - 1.0: initial version
@@ -31,10 +32,19 @@ Choose the transaction boundary at the application/use-case level so participati
 
 Do not hold database transactions open across slow external calls unless the design explicitly requires it and the trade-off is understood.
 
+For background processors that claim durable work before calling an external provider, prefer a two-phase boundary:
+1. atomically claim/lease the work and persist the processing state inside a short database transaction;
+2. commit that transaction before performing network/external I/O;
+3. persist the provider outcome in a later transaction.
+
+The claim must be concurrency-safe and recoverable after crashes. Use the database mechanisms appropriate to the chosen engine (for example atomic state changes, row locks, leases, or skip-locked claiming) rather than an unprotected read-then-process sequence.
+
 ## Concurrency
 Protect invariants with the database's available correctness mechanisms: unique/foreign/check constraints, optimistic concurrency/versioning, atomic updates, locks, idempotency keys and suitable isolation.
 
 Do not rely on unprotected read-then-write sequences when concurrent requests can invalidate the decision.
+
+For retryable durable work, persist enough state to distinguish terminal failure from retryable failure and to reconstruct the next eligible execution after process restart. Retry scheduling must not exist only in memory when losing it would change system behavior.
 
 ## Time
 Store instants in an unambiguous form (normally UTC) while preserving local calendar dates/times when the business rule itself is local. Do not convert a local-calendar rule into an instant without reason.
@@ -54,5 +64,7 @@ Translate database/provider errors when they represent stable application semant
 - [ ] Runtime query values parameterized
 - [ ] Transaction boundary matches the invariant
 - [ ] External I/O not accidentally inside long transactions
+- [ ] Durable work is claimed atomically before external I/O
+- [ ] Retry/lease state survives process restarts when required
 - [ ] Concurrency-sensitive invariants protected atomically
 - [ ] One authoritative reproducible schema source exists
