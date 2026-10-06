@@ -66,11 +66,15 @@ skills/
 │   ├── localization.md
 │   └── test-generator.md
 ├── agents/
+│   ├── claude/
+│   └── codex/
 ├── README.md
 └── CHANGELOG.md
 ```
 
 `core/` owns standards that should not be redefined independently by frontend/backend or agent-specific skills. Frontend/backend skills adapt those standards to their layer without changing their intent. Agent-specific files may adapt invocation/configuration, but reusable engineering policy belongs in `core/`.
+
+`agents/` contains agent-specific adapters. `agents/claude/` contains Claude-specific integration, while `agents/codex/` contains native Codex Agent Skills. Codex adapters are deliberately thin: they resolve and load the canonical standards from this shared checkout instead of duplicating them. Updating this checkout therefore updates the standards consumed by linked Codex skills.
 
 ## Versioning
 

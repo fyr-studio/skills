@@ -3,6 +3,16 @@
 Global change history for all skills.
 For the specific changelog of each skill, see the file header.
 
+## 2026-10
+
+### Native Codex skill adapters v1.0.0
+- Added `agents/codex/fyr-engineering/SKILL.md`.
+- Added `agents/codex/fyr-backend/SKILL.md`.
+- Added `agents/codex/fyr-frontend/SKILL.md`.
+- Added `agents/codex/fyr-verification/SKILL.md`.
+- Kept canonical standards in `core/`, `backend/` and `frontend/`.
+- Added thin adapters for global Codex discovery while preserving one shared Fyr Studio checkout.
+
 ## 2026-08
 
 ### Shared agent workflow v1.1
