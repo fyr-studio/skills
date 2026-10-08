@@ -1,7 +1,8 @@
 # Database Guidelines — Backend
-version: 3.1
-last-updated: 2026-08
+version: 3.2
+last-updated: 2026-10
 changelog:
+  - 3.2: add external-provider identity/idempotency guidance and require uniqueness semantics to match provider guarantees and domain ownership
   - 3.1: add explicit claim-before-external-I/O and retry-state persistence guidance for background processors
   - 3.0: generalize relational persistence guidance beyond PostgreSQL/Dapper while preserving correctness standards
   - 2.0: Clean Architecture transaction/concurrency/schema guidance
@@ -46,6 +47,24 @@ Do not rely on unprotected read-then-write sequences when concurrent requests ca
 
 For retryable durable work, persist enough state to distinguish terminal failure from retryable failure and to reconstruct the next eligible execution after process restart. Retry scheduling must not exist only in memory when losing it would change system behavior.
 
+## External-provider identity and idempotency
+Before using an external-provider identifier as a uniqueness key, idempotency key, lookup key or conflict-recovery key, determine what the provider actually guarantees that identifier represents.
+
+Product, price, plan, SKU and entitlement identifiers commonly identify a catalog item or resource type. Do not assume they identify a globally unique grant, purchase, subscription, event or customer-specific instance unless the provider explicitly guarantees that semantic.
+
+Prefer a provider-issued transaction/grant/event identifier when it is stable and unique for the lifecycle the domain needs to identify. When no such per-instance identifier exists and the domain intentionally models one mutable effective relationship, scope identity to the owning subject plus provider plus provider resource/type (for example account/customer + provider + entitlement) and update that row in place.
+
+If repeated historical instances must coexist, introduce an additional stable instance discriminator only when provider semantics or domain requirements justify it; do not add timestamps or larger composite keys merely to suppress collisions.
+
+Database constraints, synchronization lookups, upsert keys and duplicate/conflict recovery must all use the same identity semantics. Do not catch a uniqueness failure using one global key and then attempt to reload using a differently scoped owner-specific key.
+
+Before changing a uniqueness constraint for provider-backed state, verify at minimum:
+- two different owners can hold the same catalog/resource identifier when the provider allows it;
+- repeated synchronization for the same owner/resource is idempotent;
+- mutable fields such as expiration are updated on the intended row;
+- revocation/removal affects only the intended owner;
+- re-grant/re-purchase behavior matches the domain's historical-vs-effective model.
+
 ## Time
 Store instants in an unambiguous form (normally UTC) while preserving local calendar dates/times when the business rule itself is local. Do not convert a local-calendar rule into an instant without reason.
 
@@ -67,4 +86,5 @@ Translate database/provider errors when they represent stable application semant
 - [ ] Durable work is claimed atomically before external I/O
 - [ ] Retry/lease state survives process restarts when required
 - [ ] Concurrency-sensitive invariants protected atomically
+- [ ] External-provider IDs and uniqueness keys match documented provider/domain identity semantics
 - [ ] One authoritative reproducible schema source exists
