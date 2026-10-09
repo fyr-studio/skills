@@ -5,6 +5,9 @@ For the specific changelog of each skill, see the file header.
 
 ## 2026-10
 
+### Backend database v3.2
+- Updated `backend/database.md` to v3.2 with external-provider identity/idempotency guidance: catalog identifiers such as products, plans, SKUs or entitlements must not be treated as globally unique grant instances without explicit provider guarantees; constraints, sync lookups, upserts and conflict recovery must share the same owner/provider/resource identity semantics.
+
 ### Native Codex skill adapters v1.0.0
 - Added `agents/codex/fyr-engineering/SKILL.md`.
 - Added `agents/codex/fyr-backend/SKILL.md`.
