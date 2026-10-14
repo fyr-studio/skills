@@ -1,7 +1,8 @@
 # Verification — Core
-version: 1.0.0
-last-updated: 2026-08
+version: 1.1.0
+last-updated: 2026-10
 changelog:
+  - 1.1.0: document project-owned Fyr MCP versioning policy
   - 1.0.0: initial agent-agnostic verification standard
 
 ## Goal
@@ -28,6 +29,16 @@ Start with:
 5. targeted code/config/tests required to evaluate each criterion.
 
 Run existing relevant build, test, lint or static-analysis commands when they provide useful evidence and are safe in the current environment.
+
+## Fyr MCP release version policy
+Use an optional `.fyr-tools.json` in the project repository only when automatic version detection does not reflect the project's real release authority. Keep canonical release configuration in the project repository, not machine-global settings. MCP tools should prefer this policy when available.
+
+Its `versioning` object may define:
+- `canonicalSource`: the authoritative project file for the release version;
+- `ignoreSources`: version-bearing files to exclude when checking for conflicting versions;
+- `required`: whether release verification requires a determinable canonical version.
+
+Omit the file when automatic detection already reflects the release authority.
 
 Do not install/update dependencies, generate files, run destructive migrations, or rewrite repository state merely to complete verification.
 
