@@ -1,7 +1,8 @@
 # Backend Testing Guidelines
-version: 3.0
-last-updated: 2026-08
+version: 3.1.0
+last-updated: 2026-11
 changelog:
+  - 3.1.0: cover full-input identifier and credential validation
   - 3.0: remove .NET-specific tooling assumptions and align with core risk-based testing
   - 2.0: modular Clean Architecture/CQRS testing guidance
   - 1.0: initial version
@@ -37,6 +38,12 @@ Separate one logical iteration/use case from scheduling loops where practical; t
 
 ## Transport adapters
 Thin endpoints usually need fewer unit tests. Focus tests on transport-specific mapping/serialization/authorization behavior not already covered below.
+
+## Full-input validation
+
+For identifiers, credential headers and other security-sensitive formats, test that validation rejects trailing LF/CRLF, embedded control characters and valid prefixes/suffixes around invalid input. Match the entire input rather than trusting anchors whose meaning varies by regex engine.
+
+In .NET regexes, `$` can match before a final newline. Where the contract requires an exact whole-string match, use `\A...\z` or an equivalent explicit full-input check; avoid multiline anchor behavior. Include a valid value plus a trailing newline as a regression case. Do not silently trim credentials unless normalization is part of the documented contract.
 
 ## Checklist
 - [ ] Existing project test stack reused
